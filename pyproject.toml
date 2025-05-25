@@ -8,9 +8,11 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = [
+    "neo4j>=5.28.1",
     "pandas>=2.2.3",
     "pydantic>=2.11.5",
     "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
     "requests>=2.32.3",
 ]
 
