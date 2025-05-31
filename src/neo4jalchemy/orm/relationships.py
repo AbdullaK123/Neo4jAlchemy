@@ -555,12 +555,26 @@ class GraphRelationship(BaseModel, metaclass=GraphRelationshipMeta):
         """Create relationship instance from graph edge."""
         # Prepare data for relationship creation
         data = {
-            'id': edge.id,
             'from_id': edge.from_id,
             'to_id': edge.to_id,
             'weight': edge.weight
         }
-        data.update(edge.properties)
+        
+        # Get all fields from the model
+        for field_name, field_info in cls.model_fields.items():
+            if field_name not in ['id', 'from_id', 'to_id', 'weight', 'created_at', 'updated_at']:
+                # Get value from edge properties or use field default
+                if field_name in edge.properties:
+                    data[field_name] = edge.properties[field_name]
+                elif field_info.default is not None:
+                    data[field_name] = field_info.default
+                elif field_info.default_factory is not None:
+                    data[field_name] = field_info.default_factory()
+        
+        # Add any additional properties from edge that aren't in model fields
+        for key, value in edge.properties.items():
+            if key not in data:
+                data[key] = value
         
         # Use Pydantic's validation
         relationship = cls.model_validate(data)

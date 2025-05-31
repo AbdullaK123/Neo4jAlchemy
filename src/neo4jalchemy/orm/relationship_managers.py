@@ -93,6 +93,12 @@ class RelationshipQuery(Generic[RelationshipType]):
         
         # Apply pagination
         paginated = self._apply_pagination(ordered)
+
+        # reset filters
+        self._filters = []
+
+        # reset ordering
+        self._order_by = []
         
         return paginated
     
@@ -201,14 +207,11 @@ class RelationshipQuery(Generic[RelationshipType]):
             reverse = field.startswith('-')
             field_name = field[1:] if reverse else field
             
-            def sort_key(rel):
-                value = getattr(rel, field_name, None)
-                # Handle None values by putting them at the end
-                if value is None:
-                    return float('inf') if not reverse else float('-inf')
-                return value
-            
-            sorted_relationships.sort(key=sort_key, reverse=reverse)
+            # Sort with proper handling of reverse flag
+            sorted_relationships.sort(
+                key=lambda rel: getattr(rel, field_name, None),
+                reverse=reverse
+            )
         
         return sorted_relationships
     
