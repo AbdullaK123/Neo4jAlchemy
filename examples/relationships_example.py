@@ -494,7 +494,7 @@ async def create_relationships(data):
         to_node=mobile_project,
         role="architect",
         since=datetime.now() - timedelta(days=10),
-        hours_per_week=20,
+        hours_per_week=30,
         responsibilities=["system_design", "technical_decisions"]
     )
     
