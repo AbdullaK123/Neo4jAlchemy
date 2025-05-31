@@ -4,55 +4,54 @@ Neo4jAlchemy GraphEntity System Example
 
 This example demonstrates the power of the new GraphEntity ORM system,
 showing how it brings SQLAlchemy-style elegance to graph development.
+
+FIXED: Uses pure Pydantic V2 Field annotations instead of mixing ORM fields.
 """
 
 import asyncio
 from datetime import datetime
-from typing import Optional, List
-from pydantic import Field, EmailStr
+from typing import Optional, List, Literal
+from pydantic import Field
 
 from neo4jalchemy.core.graph import Graph
 from neo4jalchemy.orm.entities import GraphEntity, graph_entity
-from neo4jalchemy.orm.fields import StringField, IntegerField, BooleanField, ListField
 
 
 # =============================================================================
-# DEFINE ENTITIES
+# DEFINE ENTITIES (PURE PYDANTIC V2 APPROACH)
 # =============================================================================
+graph = Graph(name="company_ecosystem")
 
-@graph_entity(label="User")
+@graph_entity(label="User", graph=graph)
 class User(GraphEntity):
     """
     User entity with rich validation and ORM features.
     
-    Combines Pydantic validation with graph-specific functionality.
+    Uses PURE Pydantic V2 fields with proper type annotations.
     """
     
-    # Pydantic fields with validation
+    # Pydantic V2 fields with full validation
     name: str = Field(min_length=1, max_length=100, description="User's full name")
-    email: str = Field(description="User's email address")
+    email: str = Field(pattern=r'^[^@]+@[^@]+\.[^@]+$', description="User's email address")
     age: int = Field(ge=0, le=150, description="User's age")
     bio: Optional[str] = Field(None, max_length=500, description="User biography")
     is_active: bool = Field(default=True, description="Whether user is active")
     join_date: datetime = Field(default_factory=datetime.now, description="When user joined")
     
-    # ORM fields with graph-specific features
-    username = StringField(unique=True, index=True, required=True, max_length=50)
-    skill_level = IntegerField(min_value=1, max_value=10, default=1)
-    tags = ListField(StringField(), default=[])
-    verified = BooleanField(default=False, index=True)
-    
-    class Config:
-        graph_label = "User"
+    # Additional fields with type annotations
+    username: str = Field(min_length=3, max_length=50, description="Unique username")
+    skill_level: int = Field(default=1, ge=1, le=10, description="Skill level 1-10")
+    tags: List[str] = Field(default_factory=list, description="User tags")
+    verified: bool = Field(default=False, description="Whether user is verified")
     
     async def _pre_save(self):
         """Hook: Ensure username is lowercase before saving."""
-        if hasattr(self, 'username') and self.username:
+        if self.username:
             self.username = self.username.lower()
     
     async def _post_save(self):
         """Hook: Log user creation/update."""
-        action = "created" if not self._original_data else "updated"
+        action = "created" if not hasattr(self, '_was_persisted') else "updated"
         print(f"🔄 User {self.name} ({self.id}) {action}")
     
     def is_expert(self) -> bool:
@@ -60,31 +59,28 @@ class User(GraphEntity):
         return self.skill_level >= 8
     
     def __str__(self):
-        return f"{self.name} (@{getattr(self, 'username', 'no-username')})"
+        return f"{self.name} (@{self.username})"
 
 
-@graph_entity(label="Project")
+@graph_entity(label="Project", graph=graph)
 class Project(GraphEntity):
     """Project entity with rich metadata."""
     
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(max_length=1000)
-    status: str = Field(default="planning", regex="^(planning|active|completed|archived)$")
+    status: Literal["planning", "active", "completed", "archived"] = Field(default="planning")
     priority: int = Field(ge=1, le=5, default=3)
     created_by: str = Field(description="Creator user ID")
     
-    # ORM fields
-    project_code = StringField(unique=True, index=True, required=True)
-    budget = IntegerField(min_value=0, default=0)
-    is_public = BooleanField(default=False)
-    tech_stack = ListField(StringField(), default=[])
-    
-    class Config:
-        graph_label = "Project"
+    # Additional fields with proper annotations
+    project_code: str = Field(min_length=3, max_length=20, description="Unique project code")
+    budget: int = Field(default=0, ge=0, description="Project budget")
+    is_public: bool = Field(default=False, description="Whether project is public")
+    tech_stack: List[str] = Field(default_factory=list, description="Technology stack")
     
     async def _pre_save(self):
         """Ensure project code is uppercase."""
-        if hasattr(self, 'project_code') and self.project_code:
+        if self.project_code:
             self.project_code = self.project_code.upper()
     
     def is_high_priority(self) -> bool:
@@ -92,29 +88,26 @@ class Project(GraphEntity):
         return self.priority >= 4
     
     def __str__(self):
-        return f"{self.title} ({getattr(self, 'project_code', 'NO-CODE')})"
+        return f"{self.title} ({self.project_code})"
 
 
-@graph_entity(label="Company")
+@graph_entity(label="Company", graph=graph)
 class Company(GraphEntity):
     """Company entity."""
     
     name: str = Field(min_length=1, max_length=200)
     industry: str = Field(max_length=100)
     founded_year: int = Field(ge=1800, le=2024)
-    website: Optional[str] = None
+    website: Optional[str] = Field(None, description="Company website")
     
-    # ORM fields
-    company_code = StringField(unique=True, index=True, required=True)
-    employee_count = IntegerField(min_value=1, default=1)
-    is_hiring = BooleanField(default=False)
-    tech_focus = ListField(StringField(), default=[])
-    
-    class Config:
-        graph_label = "Company"
+    # Additional fields with proper annotations
+    company_code: str = Field(min_length=3, max_length=10, description="Unique company code")
+    employee_count: int = Field(default=1, ge=1, description="Number of employees")
+    is_hiring: bool = Field(default=False, description="Whether company is hiring")
+    tech_focus: List[str] = Field(default_factory=list, description="Technology focus areas")
     
     def __str__(self):
-        return f"{self.name} ({getattr(self, 'company_code', 'NO-CODE')})"
+        return f"{self.name} ({self.company_code})"
 
 
 # =============================================================================
@@ -127,14 +120,6 @@ async def demonstrate_graph_entity_system():
     """
     print("🚀 Neo4jAlchemy GraphEntity System Demo")
     print("=" * 60)
-    
-    # Create graph for our entities
-    graph = Graph(name="company_ecosystem")
-    
-    # Configure entities to use our graph
-    User.Config.graph = graph
-    Project.Config.graph = graph
-    Company.Config.graph = graph
     
     print(f"\n📊 Created graph: {graph.name}")
     
@@ -303,12 +288,12 @@ async def demonstrate_graph_entity_system():
             name="",  # Too short
             email="not-an-email",  # Invalid format
             age=200,  # Too old
-            username="test"
+            username="ab"  # Too short
         )
     except Exception as e:
         print(f"❌ Validation Error (expected): {type(e).__name__}")
     
-    # Test ORM field validation
+    # Test field validation on assignment
     try:
         test_user = User(
             name="Test User",
@@ -316,19 +301,19 @@ async def demonstrate_graph_entity_system():
             age=25,
             username="test_user"
         )
-        test_user.skill_level = -1  # Invalid skill level
+        test_user.skill_level = 15  # Too high
     except ValueError as e:
-        print(f"❌ ORM Field Error (expected): {e}")
+        print(f"❌ Field Validation Error (expected): {e}")
     
-    # Test successful coercion
-    test_user = User(
+    # Test successful coercion and validation
+    coerce_user = User(
         name="Coercion Test",
         email="coerce@example.com",
         age=30,
-        username="coerce_test"
+        username="coerce_test",
+        skill_level=8  # Valid
     )
-    test_user.skill_level = "8"  # String should coerce to int
-    print(f"✅ Type Coercion: skill_level='8' → {test_user.skill_level} ({type(test_user.skill_level)})")
+    print(f"✅ Valid user created: {coerce_user.username} (skill: {coerce_user.skill_level})")
     
     # =============================================================================
     # 6. ENTITY RELATIONSHIPS (PREVIEW)
@@ -410,18 +395,14 @@ async def demonstrate_advanced_features():
     # Create separate graph for advanced demo
     advanced_graph = Graph(name="advanced_demo")
     
-    # Configure a test entity class
+    # Configure a test entity class with proper Pydantic V2 fields
     @graph_entity(label="AdvancedEntity", graph=advanced_graph)
     class AdvancedEntity(GraphEntity):
-        name: str
+        name: str = Field(min_length=1)
         value: int = Field(default=0)
         
-        # Custom field with complex validation
-        status = StringField(
-            choices=["draft", "review", "approved", "rejected"],
-            default="draft",
-            index=True
-        )
+        # Use Literal for choices (Pydantic V2 way)
+        status: Literal["draft", "review", "approved", "rejected"] = Field(default="draft")
         
         async def _pre_save(self):
             print(f"   🔄 Pre-save hook for {self.name}")
@@ -465,23 +446,10 @@ async def demonstrate_advanced_features():
     
     # Test label lookup
     user_class = get_entity_by_label("User")
-    print(f"🔍 Found User class by label: {user_class.__name__}")
-    
-    # 5. Test field introspection
-    print(f"\n5️⃣ Field Introspection")
-    from neo4jalchemy.orm.fields import get_fields
-    
-    user_fields = get_fields(User)
-    print(f"📊 User ORM fields: {len(user_fields)}")
-    for name, field in user_fields.items():
-        field_info = f"{name}: {field.__class__.__name__}"
-        if field.unique:
-            field_info += " (unique)"
-        if field.index:
-            field_info += " (indexed)"
-        if field.required:
-            field_info += " (required)"
-        print(f"   - {field_info}")
+    if user_class:
+        print(f"🔍 Found User class by label: {user_class.__name__}")
+    else:
+        print(f"🔍 User class not found by label")
     
     return advanced_graph
 
@@ -504,14 +472,13 @@ async def main():
         print(f"\n\n🎉 GraphEntity System Summary")
         print("=" * 60)
         print(f"✅ Successfully demonstrated:")
-        print(f"   - Type-safe entity creation with Pydantic validation")
+        print(f"   - Type-safe entity creation with Pydantic V2 validation")
         print(f"   - Automatic graph node synchronization")
         print(f"   - Change tracking and dirty field detection")
         print(f"   - Lifecycle hooks (pre/post save/delete)")
         print(f"   - CRUD operations with async/await")
-        print(f"   - ORM field system with validation and coercion")
+        print(f"   - Pure Pydantic V2 field system")
         print(f"   - Entity registry and introspection")
-        print(f"   - Field metadata (unique, index, required)")
         print(f"   - Business logic integration")
         print(f"   - Graph export and analysis")
         
