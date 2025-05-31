@@ -138,6 +138,7 @@ class RelationshipQuery(Generic[RelationshipType]):
         
         return relationships
     
+    
     def _apply_filters(self, relationships: List[RelationshipType]) -> List[RelationshipType]:
         """Apply filters to relationship list."""
         if not self._filters:
@@ -154,22 +155,22 @@ class RelationshipQuery(Generic[RelationshipType]):
                         field_name, lookup = field.split('__', 1)
                         relationship_value = getattr(relationship, field_name, None)
                         
-                        if lookup == 'gte' and relationship_value < value:
+                        if lookup == 'gte' and (relationship_value is None or relationship_value < value):
                             match = False
                             break
-                        elif lookup == 'lte' and relationship_value > value:
+                        elif lookup == 'lte' and (relationship_value is None or relationship_value > value):
                             match = False
                             break
-                        elif lookup == 'gt' and relationship_value <= value:
+                        elif lookup == 'gt' and (relationship_value is None or relationship_value <= value):
                             match = False
                             break
-                        elif lookup == 'lt' and relationship_value >= value:
+                        elif lookup == 'lt' and (relationship_value is None or relationship_value >= value):
                             match = False
                             break
-                        elif lookup == 'contains' and value not in relationship_value:
+                        elif lookup == 'contains' and (relationship_value is None or value not in relationship_value):
                             match = False
                             break
-                        elif lookup == 'in' and relationship_value not in value:
+                        elif lookup == 'in' and (relationship_value is None or relationship_value not in value):
                             match = False
                             break
                     else:
@@ -186,7 +187,7 @@ class RelationshipQuery(Generic[RelationshipType]):
                 filtered.append(relationship)
         
         return filtered
-    
+
     def _apply_ordering(self, relationships: List[RelationshipType]) -> List[RelationshipType]:
         """Apply ordering to relationship list."""
         if not self._order_by:
@@ -200,10 +201,14 @@ class RelationshipQuery(Generic[RelationshipType]):
             reverse = field.startswith('-')
             field_name = field[1:] if reverse else field
             
-            sorted_relationships.sort(
-                key=lambda rel: getattr(rel, field_name, 0) if getattr(rel, field_name, None) is not None else 0,
-                reverse=reverse
-            )
+            def sort_key(rel):
+                value = getattr(rel, field_name, None)
+                # Handle None values by putting them at the end
+                if value is None:
+                    return float('inf') if not reverse else float('-inf')
+                return value
+            
+            sorted_relationships.sort(key=sort_key, reverse=reverse)
         
         return sorted_relationships
     

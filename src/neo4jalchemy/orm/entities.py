@@ -566,7 +566,28 @@ def get_entity_classes() -> Set[Type[GraphEntity]]:
 
 def get_entity_by_label(label: str) -> Optional[Type[GraphEntity]]:
     """Get entity class by its graph label."""
-    for entity_class in get_entity_classes():
-        if entity_class._get_class_label() == label:
+    if not hasattr(GraphEntity, '_entity_registry'):
+        return None
+        
+    # Create a list to handle multiple matches and pick the most specific one
+    matches = []
+    
+    for entity_class in GraphEntity._entity_registry:
+        try:
+            if hasattr(entity_class, '_get_class_label') and entity_class._get_class_label() == label:
+                matches.append(entity_class)
+        except AttributeError:
+            # Skip classes that don't have proper configuration
+            continue
+    
+    if not matches:
+        return None
+    
+    # If multiple matches, prefer the one from the main module over test modules
+    for entity_class in matches:
+        module_name = entity_class.__module__
+        if not module_name.startswith('tests.'):
             return entity_class
-    return None
+    
+    # If all are from test modules, return the first one
+    return matches[0]

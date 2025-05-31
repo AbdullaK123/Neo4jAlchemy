@@ -510,18 +510,29 @@ class GraphRelationship(BaseModel, metaclass=GraphRelationshipMeta):
         Returns:
             (relationship, created) tuple
         """
-        # Try to find existing relationship
+        # Try to find existing relationship by checking all instances first
+        relationship_type = cls._get_class_relationship_type()
+        
+        # Check instance cache for existing relationships between these nodes
+        for instance in cls._instances.values():
+            if (instance.from_id == from_node.id and 
+                instance.to_id == to_node.id):
+                # Found existing relationship
+                return instance, False
+        
+        # Try to find in graph if not in cache
         graph = cls._get_class_graph()
         if graph:
             edges = graph.get_edges_between(from_node.id, to_node.id)
             for edge in edges:
-                if edge.relationship_type == cls._get_class_relationship_type():
-                    # Found existing, check if it matches criteria
+                if edge.relationship_type == relationship_type:
+                    # Found existing, create instance from edge
                     existing = cls._from_edge(edge)
                     return existing, False
         
-        # Create new relationship - only use defaults, ignore invalid kwargs
+        # Create new relationship
         create_data = defaults or {}
+        create_data.update(kwargs)  # Add any additional criteria as properties
         relationship = await cls.create(from_node, to_node, **create_data)
         return relationship, True
     
