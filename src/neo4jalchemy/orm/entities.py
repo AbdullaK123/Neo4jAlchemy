@@ -59,17 +59,8 @@ class GraphEntityMeta(type(BaseModel)):
         # Extract entity configuration before Pydantic processes the class
         entity_config = namespace.pop('_entity_config', None)
         if entity_config is None:
-            # Look for Config class in namespace
-            config_class = namespace.get('Config')
-            if config_class:
-                entity_config = GraphEntityConfig(
-                    graph_label=getattr(config_class, 'graph_label', name),
-                    graph=getattr(config_class, 'graph', None),
-                    auto_sync=getattr(config_class, 'auto_sync', True),
-                    track_changes=getattr(config_class, 'track_changes', True)
-                )
-            else:
-                entity_config = GraphEntityConfig(graph_label=name)
+            # Use default configuration (no more Config class support)
+            entity_config = GraphEntityConfig(graph_label=name)
         
         # Create the Pydantic model
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)

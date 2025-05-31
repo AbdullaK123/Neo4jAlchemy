@@ -32,3 +32,25 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.0.0",
 ]
+
+# Fix the asyncio deprecation warning
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+asyncio_mode = "auto"
+
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+]
+
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests", 
+    "unit: marks tests as unit tests",
+]

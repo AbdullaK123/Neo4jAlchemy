@@ -41,6 +41,7 @@ def another_graph():
 
 
 # Test entity classes using pure Pydantic V2 fields
+@graph_entity(label="User")  # ← Use decorator instead
 class User(GraphEntity):
     """Test user entity with comprehensive validation."""
     name: str = Field(min_length=1, max_length=100, description="User's full name")
@@ -50,9 +51,6 @@ class User(GraphEntity):
     bio: Optional[str] = Field(None, max_length=500, description="User biography")
     tags: List[str] = Field(default_factory=list, description="User tags")
     score: float = Field(default=0.0, ge=0.0, le=100.0, description="User score")
-    
-    class Config:
-        graph_label = "User"
 
 
 @graph_entity(label="Person")
@@ -992,29 +990,28 @@ class TestDecoratorFunctionality:
                 name: str
     
     def test_config_class_vs_decorator(self, test_graph):
-        """Test Config class vs decorator configuration."""
-        # Entity with Config class
-        class ConfigClassEntity(GraphEntity):
-            name: str
-            
-            class Config:
-                graph_label = "ConfigClass"
-                graph = test_graph
+        """Test decorator configuration approaches."""
         
-        # Entity with decorator
+        # Entity with decorator (recommended approach)
         @graph_entity(label="DecoratorEntity", graph=test_graph)
         class DecoratorEntity(GraphEntity):
             name: str
         
-        # Both should work
-        config_entity = ConfigClassEntity(name="Config Test")
+        # Entity with inline configuration via decorator
+        @graph_entity(label="InlineEntity", graph=test_graph, auto_sync=False)
+        class InlineEntity(GraphEntity):
+            name: str
+            value: int = 0
+        
+        # Test decorator entity
         decorator_entity = DecoratorEntity(name="Decorator Test")
-        
-        assert config_entity._get_label() == "ConfigClass"
         assert decorator_entity._get_label() == "DecoratorEntity"
+        assert decorator_entity._graph_node is not None  # auto_sync=True by default
         
-        assert config_entity._graph_node is not None
-        assert decorator_entity._graph_node is not None
+        # Test inline configured entity
+        inline_entity = InlineEntity(name="Inline Test")
+        assert inline_entity._get_label() == "InlineEntity"
+        assert inline_entity._graph_node is None  # auto_sync=False
 
 
 # =============================================================================
@@ -1050,7 +1047,9 @@ class TestEntityRegistry:
     
     def test_dynamic_entity_registration(self):
         """Test that dynamically created entities are registered."""
-        initial_count = len(get_entity_classes())
+        # Get current registered entities
+        existing_classes = get_entity_classes()
+        existing_labels = {cls._get_class_label() for cls in existing_classes}
         
         # Create new entity class dynamically
         @graph_entity(label="DynamicEntity")
@@ -1059,8 +1058,12 @@ class TestEntityRegistry:
             created_dynamically: bool = True
         
         # Should be registered
-        new_count = len(get_entity_classes())
-        assert new_count == initial_count + 1
+        new_classes = get_entity_classes()
+        new_labels = {cls._get_class_label() for cls in new_classes}
+        
+        # Check that our new entity is in the registry
+        assert "DynamicEntity" in new_labels
+        assert "DynamicEntity" not in existing_labels  # Wasn't there before
         
         # Should be findable by label
         dynamic_class = get_entity_by_label("DynamicEntity")
@@ -1071,7 +1074,7 @@ class TestEntityRegistry:
 # TEST INSTANCE CACHING
 # =============================================================================
 
-@pytest.mark.asyncio
+
 class TestInstanceCaching:
     """Test entity instance caching behavior."""
     
@@ -1096,6 +1099,7 @@ class TestInstanceCaching:
         assert user.id not in Product._instances
         assert product.id not in User._instances
     
+    @pytest.mark.asyncio
     async def test_cache_cleanup_on_delete(self, test_graph):
         """Test that deleted entities are removed from cache."""
         User._entity_config.graph = test_graph
